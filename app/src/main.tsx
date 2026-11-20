@@ -85,7 +85,7 @@ function applyCommand(editor: Editor, msg: any): any {
       }
       const y = yCenter - NODE_H / 2
       shapes.push({ id, x, y, w: NODE_W, h: NODE_H, text: node.text ?? '', color: color(node.color ?? (depth === 0 ? 'blue' : 'black')), fill: depth === 0 ? 'solid' : 'none' })
-      for (const ci of childInfos) arrows.push([{ x: x + NODE_W, y: yCenter }, { x: ci.cx - NODE_W / 2, y: ci.cy }])
+      for (const ci of childInfos) arrows.push([id, ci.id])
       return { id, cx: x + NODE_W / 2, cy: yCenter, top: y, bottom: y + NODE_H }
     }
     layout(msg.root || { text: 'Root' }, 0)
@@ -97,10 +97,14 @@ function applyCommand(editor: Editor, msg: any): any {
       }})
       ids.push(s.id)
     }
-    for (const [a, b] of arrows) {
-      const id = createShapeId()
-      editor.createShape({ id, type: 'arrow', x: 0, y: 0, props: { start: { x: a.x, y: a.y }, end: { x: b.x, y: b.y }, color: 'grey', size: 's' } })
-      ids.push(id)
+    for (const [pid, cid] of arrows) {
+      const aid = createShapeId()
+      editor.createShape({ id: aid, type: 'arrow', props: { color: 'grey', size: 's' } })
+      editor.createBindings([
+        { type: 'arrow', fromId: aid, toId: pid, props: { terminal: 'start', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false } },
+        { type: 'arrow', fromId: aid, toId: cid, props: { terminal: 'end', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false } },
+      ])
+      ids.push(aid)
     }
     editor.zoomToFit({ animation: { duration: 200 } })
     return { ok: true, nodes: shapes.length, ids }
