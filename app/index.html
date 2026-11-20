@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Drawo</title>
+    <style>
+      html,body,#root{margin:0;height:100%;width:100%;overflow:hidden;background:#fff}
+      /* Drawo UI font: clean native stack (no network). Menus portal to <body>,
+         so cover body and all tldraw UI classes. Canvas shape fonts are unaffected. */
+      body,.tl-container,[class^="tlui-"],[class*=" tlui-"]{
+        font-family:"Inter Variable","Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif !important;
+      }
+      /* hide third-party watermark (personal local use) */
+      .tl-watermark_SEE-LICENSE,[class*="watermark" i]{display:none!important}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
