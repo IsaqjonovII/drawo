@@ -1,7 +1,7 @@
 // Drawo desktop shell (standalone Electron app).
 // Serves the bundled tldraw app over a privileged drawo:// scheme and opens a
 // loopback HTTP control port so local agents (via the MCP server) can draw.
-const { app, BrowserWindow, protocol, ipcMain, net } = require('electron')
+const { app, BrowserWindow, protocol, ipcMain, net, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
@@ -87,6 +87,14 @@ app.whenReady().then(() => {
       return new Response('Not found', { status: 404 })
     }
   })
+  // Local-first guarantee: block any outbound Google Fonts request so the app never
+  // phones out for fonts. Canvas/UI fall back to the system/Noto stack (see app CSS).
+  try {
+    session.defaultSession.webRequest.onBeforeRequest(
+      { urls: ['*://fonts.googleapis.com/*', '*://fonts.gstatic.com/*'] },
+      (_details, cb) => cb({ cancel: true })
+    )
+  } catch (e) { console.error('[drawo] font-block failed:', e.message) }
   startControlServer()
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

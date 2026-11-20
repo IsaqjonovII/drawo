@@ -12,6 +12,13 @@
       body,.tl-container,[class^="tlui-"],[class*=" tlui-"]{
         font-family:"Inter Variable","Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif !important;
       }
+      /* Canvas shape fonts: system/Noto stack only. No Google, no font downloads. */
+      .tl-container{
+        --tl-font-draw:"Segoe Print","Comic Sans MS","Noto Sans",system-ui,sans-serif !important;
+        --tl-font-sans:"Noto Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif !important;
+        --tl-font-serif:"Noto Serif",Georgia,"Times New Roman",serif !important;
+        --tl-font-mono:"Cascadia Code",Consolas,"Noto Sans Mono",ui-monospace,monospace !important;
+      }
       /* hide third-party watermark (personal local use) */
       .tl-watermark_SEE-LICENSE,[class*="watermark" i]{display:none!important}
       /* ---- Drawo theme ---- */

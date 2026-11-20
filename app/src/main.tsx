@@ -45,7 +45,7 @@ function applyCommand(editor: Editor, msg: any): any {
         }})
       } else if (s.type === 'text') {
         editor.createShape({ id, type: 'text', x: s.x || 0, y: s.y || 0, props: {
-          richText: rt(s.text), color: color(s.color), size: s.size || 'm',
+          richText: rt(s.text), color: color(s.color), size: s.size || 'm', font: font(s.font),
         }})
       } else if (s.type === 'note') {
         editor.createShape({ id, type: 'note', x: s.x || 0, y: s.y || 0, props: {
