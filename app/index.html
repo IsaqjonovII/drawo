@@ -28,6 +28,9 @@
         box-shadow: 0 6px 24px rgba(16,18,26,0.12) !important;
         border: none !important;
       }
+      /* square-grid line colors (GPU CSS grid) */
+      .drawo-grid { --drawo-grid-minor: rgba(0,0,0,0.045); --drawo-grid-major: rgba(0,0,0,0.09); }
+      .tl-theme__dark .drawo-grid, [data-color-mode="dark"] .drawo-grid { --drawo-grid-minor: rgba(255,255,255,0.05); --drawo-grid-major: rgba(255,255,255,0.09); }
       /* board pill (top-left) */
       .drawo-menupanel { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 4px; }
       .drawo-logo { width: 26px; height: 26px; object-fit: contain; user-select: none; }

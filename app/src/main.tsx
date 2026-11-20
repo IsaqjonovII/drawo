@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { Tldraw, Editor, createShapeId, useEditor, DefaultMainMenu, DefaultPageMenu, DefaultQuickActions, DefaultActionsMenu } from 'tldraw'
+import { Tldraw, Editor, createShapeId, useEditor, toRichText, DefaultMenuPanel } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { getAssetUrlsByImport } from '@tldraw/assets/imports.vite'
 import '@fontsource-variable/inter'
@@ -19,6 +19,7 @@ const COLORS = ['black','blue','green','red','orange','violet','yellow','light-b
 const FONTS = ['sans','serif','mono','draw']
 function color(c: any) { return COLORS.includes(c) ? c : 'black' }
 function font(f: any) { return FONTS.includes(f) ? f : 'sans' }
+const rt = (t: any) => toRichText(String(t ?? ''))
 
 // ---- command processor: agents send these via the MCP/HTTP bridge ----
 function applyCommand(editor: Editor, msg: any): any {
@@ -43,16 +44,16 @@ function applyCommand(editor: Editor, msg: any): any {
         }})
       } else if (s.type === 'text') {
         editor.createShape({ id, type: 'text', x: s.x || 0, y: s.y || 0, props: {
-          text: String(s.text ?? ''), color: color(s.color), size: s.size || 'm',
+          richText: rt(s.text), color: color(s.color), size: s.size || 'm',
         }})
       } else if (s.type === 'note') {
         editor.createShape({ id, type: 'note', x: s.x || 0, y: s.y || 0, props: {
-          text: String(s.text ?? ''), color: color(s.color), font: font(s.font),
+          richText: rt(s.text), color: color(s.color), font: font(s.font),
         }})
       } else { // geo (rectangle/ellipse/diamond/...)
         editor.createShape({ id, type: 'geo', x: s.x || 0, y: s.y || 0, props: {
           geo: s.geo || 'rectangle', w: s.w || 200, h: s.h || 80,
-          text: String(s.text || ''), color: color(s.color),
+          richText: rt(s.text), color: color(s.color),
           fill: s.fill || 'none', size: s.size || 'm', font: font(s.font), align: 'middle', verticalAlign: 'middle',
         }})
       }
@@ -90,7 +91,7 @@ function applyCommand(editor: Editor, msg: any): any {
     const ids: string[] = []
     for (const s of shapes) {
       editor.createShape({ id: s.id, type: 'geo', x: s.x, y: s.y, props: {
-        geo: 'rectangle', w: s.w, h: s.h, text: String(s.text ?? ''), color: s.color,
+        geo: 'rectangle', w: s.w, h: s.h, richText: rt(s.text), color: s.color,
         fill: s.fill, size: 'm', font: 'sans', align: 'middle', verticalAlign: 'middle',
       }})
       ids.push(s.id)
@@ -117,43 +118,43 @@ function applyCommand(editor: Editor, msg: any): any {
 }
 
 
-// Miro-style square grid: ADAPTIVE cell size (stays ~constant on screen as you zoom,
-// stepping in powers of 2) with very light lines. Minor lines + stronger major every 5.
+// GPU-composited square grid (CSS gradients, not SVG patterns) — adaptive cell size,
+// theme-aware via CSS vars. Repainting is a cheap compositor op, so pan/zoom stays smooth.
 function SquareGrid({ x, y, z }: any) {
-  const TARGET_MIN = 48, TARGET_MAX = 96  // comfortable on-screen cell size (px)
-  let cell = 25 * z                        // 25 page-units at current zoom
+  const TARGET_MIN = 48, TARGET_MAX = 96
+  let cell = 25 * z
   while (cell < TARGET_MIN) cell *= 2
   while (cell > TARGET_MAX) cell /= 2
   const major = cell * 5
-  const phase = (off: number, period: number) => { const m = (off * z) % period; return 0.5 + (m > 0 ? m : period + m) }
-  const mx = phase(x, cell), my = phase(y, cell)
-  const Mx = phase(x, major), My = phase(y, major)
-  return (
-    <svg className="tl-grid" version="1.1" xmlns="http://www.w3.org/2000/svg" style={{ shapeRendering: 'crispEdges' as any }}>
-      <defs>
-        <pattern id="drawo-grid-minor" width={cell} height={cell} patternUnits="userSpaceOnUse">
-          <path d={`M ${mx} 0 L ${mx} ${cell} M 0 ${my} L ${cell} ${my}`} stroke="rgba(0,0,0,0.045)" strokeWidth={1} fill="none" />
-        </pattern>
-        <pattern id="drawo-grid-major" width={major} height={major} patternUnits="userSpaceOnUse">
-          <path d={`M ${Mx} 0 L ${Mx} ${major} M 0 ${My} L ${major} ${My}`} stroke="rgba(0,0,0,0.09)" strokeWidth={1} fill="none" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#drawo-grid-minor)" />
-      <rect width="100%" height="100%" fill="url(#drawo-grid-major)" />
-    </svg>
-  )
+  const ox = x * z, oy = y * z
+  const wrap = (v: number, p: number) => ((v % p) + p) % p
+  const mn = "var(--drawo-grid-minor)", mj = "var(--drawo-grid-major)"
+  const style: any = {
+    position: "absolute", inset: 0, pointerEvents: "none",
+    backgroundImage: [
+      `linear-gradient(${mj} 1px, transparent 1px)`,
+      `linear-gradient(90deg, ${mj} 1px, transparent 1px)`,
+      `linear-gradient(${mn} 1px, transparent 1px)`,
+      `linear-gradient(90deg, ${mn} 1px, transparent 1px)`,
+    ].join(","),
+    backgroundSize: [`${major}px ${major}px`, `${major}px ${major}px`, `${cell}px ${cell}px`, `${cell}px ${cell}px`].join(","),
+    backgroundPosition: [
+      `${wrap(ox, major)}px ${wrap(oy, major)}px`,
+      `${wrap(ox, major)}px ${wrap(oy, major)}px`,
+      `${wrap(ox, cell)}px ${wrap(oy, cell)}px`,
+      `${wrap(ox, cell)}px ${wrap(oy, cell)}px`,
+    ].join(","),
+  }
+  return <div className="tl-grid drawo-grid" style={style} />
 }
 
 // ---- Drawo top-left board pill: logo + board name + default menu/undo ----
 function BoardPill() {
   return (
     <div className="drawo-menupanel">
-      <DefaultMainMenu />
       <img className="drawo-logo" src="./drawo-mark.png" alt="Drawo" draggable={false} />
       <span className="drawo-name">Untitled board</span>
-      <DefaultPageMenu />
-      <DefaultQuickActions />
-      <DefaultActionsMenu />
+      <DefaultMenuPanel />
     </div>
   )
 }
@@ -177,7 +178,7 @@ function App() {
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Tldraw
-        persistenceKey="drawo"
+        persistenceKey="drawo-v4"
         assetUrls={assetUrls}
         components={components}
         onMount={(editor) => {
