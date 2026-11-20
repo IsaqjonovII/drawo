@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { Tldraw, Editor, createShapeId, useEditor, useTools, toRichText, DefaultMenuPanel, TldrawUiButton, TldrawUiButtonIcon } from 'tldraw'
+import { Tldraw, Editor, createShapeId, useEditor, useTools, toRichText, DefaultMenuPanel, TldrawUiButton, TldrawUiButtonIcon, BaseBoxShapeUtil, HTMLContainer, T } from 'tldraw'
 import { useValue } from '@tldraw/state-react'
 import 'tldraw/tldraw.css'
 import { getAssetUrlsByImport } from '@tldraw/assets/imports.vite'
@@ -21,6 +21,63 @@ const FONTS = ['sans','serif','mono','draw']
 function color(c: any) { return COLORS.includes(c) ? c : 'black' }
 function font(f: any) { return FONTS.includes(f) ? f : 'sans' }
 const rt = (t: any) => toRichText(String(t ?? ''))
+
+// ---- Miro-style pastel palette for the custom card node (bg / border / text) ----
+const PALETTE: Record<string, { bg: string; border: string; fg: string }> = {
+  violet:       { bg: '#EADCFB', border: '#B794E8', fg: '#4A2A7A' },
+  'light-violet': { bg: '#F1E7FC', border: '#CBB2EE', fg: '#5B3A8A' },
+  blue:         { bg: '#DCEBFB', border: '#7FB2E8', fg: '#1A4D80' },
+  'light-blue': { bg: '#D4F0F2', border: '#7CC9CE', fg: '#145E63' },
+  green:        { bg: '#DDF2E0', border: '#86C98E', fg: '#1F6B2E' },
+  'light-green':{ bg: '#E6F6DC', border: '#A6D584', fg: '#3E6B1A' },
+  orange:       { bg: '#FDE6D2', border: '#F0A868', fg: '#9A4E12' },
+  red:          { bg: '#FBDEDE', border: '#E89090', fg: '#8A2020' },
+  'light-red':  { bg: '#FBE3E6', border: '#EDA0AC', fg: '#8A2A3A' },
+  yellow:       { bg: '#FBF2CC', border: '#E5CE6B', fg: '#8A6D12' },
+  grey:         { bg: '#ECEEF1', border: '#AEB4BE', fg: '#434953' },
+  black:        { bg: '#1D1D24', border: '#1D1D24', fg: '#FFFFFF' },
+}
+const pal = (c: string) => PALETTE[c] || PALETTE.grey
+
+// Custom rounded card node (Miro-like): pastel fill, colored border, 9px radius, soft shadow.
+// HTML so we get real border-radius + flex text; tldraw geo rectangles are sharp SVG paths.
+type DrawoCard = {
+  id: any; typeName: 'shape'; type: 'drawo-card'; x: number; y: number; rotation: number
+  index: any; parentId: any; isLocked: boolean; opacity: number; meta: any
+  props: { w: number; h: number; color: string; text: string; kind: 'root' | 'branch' | 'leaf' }
+}
+class DrawoCardUtil extends BaseBoxShapeUtil<DrawoCard> {
+  static override type = 'drawo-card' as const
+  static override props = { w: T.number, h: T.number, color: T.string, text: T.string, kind: T.string }
+  getDefaultProps(): DrawoCard['props'] { return { w: 160, h: 56, color: 'violet', text: '', kind: 'leaf' } }
+  override canEdit() { return false }
+  component(shape: DrawoCard) {
+    const { color, text, kind } = shape.props
+    const p = pal(color)
+    const root = kind === 'root'
+    const left = kind === 'leaf'
+    return (
+      <HTMLContainer style={{ pointerEvents: 'all' }}>
+        <div style={{
+          width: '100%', height: '100%', boxSizing: 'border-box',
+          background: p.bg, border: `2px solid ${p.border}`, borderRadius: 9,
+          color: p.fg, display: 'flex', alignItems: 'center',
+          justifyContent: left ? 'flex-start' : 'center', textAlign: left ? 'left' : 'center',
+          padding: '8px 13px', overflow: 'hidden',
+          fontFamily: '"Noto Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif',
+          fontSize: root ? 20 : 15, fontWeight: root ? 700 : (kind === 'branch' ? 600 : 500),
+          lineHeight: 1.3, letterSpacing: root ? '0.2px' : 0,
+          boxShadow: '0 1px 2px rgba(16,18,26,.10), 0 2px 8px rgba(16,18,26,.05)',
+          userSelect: 'none', whiteSpace: 'pre-wrap', wordBreak: 'normal', overflowWrap: 'break-word',
+        }}>{text}</div>
+      </HTMLContainer>
+    )
+  }
+  indicator(shape: DrawoCard) {
+    return <rect width={shape.props.w} height={shape.props.h} rx={9} ry={9} />
+  }
+}
+const drawoShapeUtils = [DrawoCardUtil]
 
 // ---- command processor: agents send these via the MCP/HTTP bridge ----
 function applyCommand(editor: Editor, msg: any): any {
@@ -65,49 +122,69 @@ function applyCommand(editor: Editor, msg: any): any {
   }
 
   if (op === 'mindmap') {
-    // msg.root: { text, color?, children?: [ ...same shape... ] }
-    const NODE_W = 200, NODE_H = 64, GAP_X = 300, GAP_Y = 28
-    let cursorY = 0
-    const shapes: any[] = []
-    const arrows: Array<[any, any]> = []
-    function layout(node: any, depth: number): { id: any; cx: number; cy: number; top: number; bottom: number } {
+    // Miro-style mind map on the custom rounded card node: one pastel color per top-level
+    // branch (whole subtree shares it), text-measured sizing (no clip / no mid-word break),
+    // overlap-free packing, smooth headless branch-colored connectors.
+    const BRANCH = ['violet', 'blue', 'green', 'orange', 'light-red', 'light-blue', 'yellow', 'light-green']
+    const COL_STEP = 320, GAP_Y = 30, MAXW = 244
+    const FONT = '"Noto Sans","Segoe UI",system-ui,sans-serif'
+    const measure = (text: string, size: number, maxWidth: number | null) =>
+      editor.textMeasure.measureText(String(text ?? ' ') || ' ', {
+        fontFamily: FONT, fontSize: size, fontWeight: size >= 20 ? 'bold' : '500',
+        fontStyle: 'normal', lineHeight: 1.3, maxWidth, padding: '12px',
+      })
+    type N = { id: any; depth: number; kind: 'root' | 'branch' | 'leaf'; branch: string; color: string; text: string; w: number; h: number; kids: N[]; cy: number }
+    const nodes: N[] = []
+    function build(node: any, depth: number, branch: string): N {
       const id = createShapeId()
-      const x = depth * (NODE_W + GAP_X - 100)
-      const kids = node.children || []
-      let yCenter: number
-      let childInfos: any[] = []
-      if (kids.length === 0) {
-        yCenter = cursorY + NODE_H / 2
-        cursorY += NODE_H + GAP_Y
-      } else {
-        childInfos = kids.map((k: any) => layout(k, depth + 1))
-        yCenter = (childInfos[0].cy + childInfos[childInfos.length - 1].cy) / 2
-      }
-      const y = yCenter - NODE_H / 2
-      shapes.push({ id, x, y, w: NODE_W, h: NODE_H, text: node.text ?? '', color: color(node.color ?? (depth === 0 ? 'blue' : 'black')), fill: depth === 0 ? 'solid' : 'none' })
-      for (const ci of childInfos) arrows.push([id, ci.id])
-      return { id, cx: x + NODE_W / 2, cy: yCenter, top: y, bottom: y + NODE_H }
+      const kind: N['kind'] = depth === 0 ? 'root' : depth === 1 ? 'branch' : 'leaf'
+      const col = depth === 0 ? 'black' : color(node.color ?? branch)
+      const fs = depth === 0 ? 20 : 15
+      const t = String(node.text ?? '')
+      const nat = measure(t, fs, null)
+      const w = Math.max(depth === 0 ? 150 : 120, Math.min(MAXW, Math.ceil(nat.w) + 4))
+      const fit = measure(t, fs, w)
+      const h = Math.max(depth === 0 ? 58 : 44, Math.ceil(fit.h) + 2)
+      const rec: N = { id, depth, kind, branch, color: col, text: t, w, h, kids: [], cy: 0 }
+      nodes.push(rec)
+      ;(node.children || []).forEach((k: any, i: number) => {
+        const cb = depth === 0 ? BRANCH[i % BRANCH.length] : branch
+        rec.kids.push(build(k, depth + 1, cb))
+      })
+      return rec
     }
-    layout(msg.root || { text: 'Root' }, 0)
+    const root = build(msg.root || { text: 'Root' }, 0, BRANCH[0])
+    let cursorY = 0
+    function place(n: N) {
+      if (n.kids.length === 0) { n.cy = cursorY + n.h / 2; cursorY += n.h + GAP_Y }
+      else { n.kids.forEach(place); n.cy = (n.kids[0].cy + n.kids[n.kids.length - 1].cy) / 2 }
+    }
+    place(root)
     const ids: string[] = []
-    for (const s of shapes) {
-      editor.createShape({ id: s.id, type: 'geo', x: s.x, y: s.y, props: {
-        geo: 'rectangle', w: s.w, h: s.h, richText: rt(s.text), color: s.color,
-        fill: s.fill, size: 'm', font: 'sans', align: 'middle', verticalAlign: 'middle',
+    for (const n of nodes) {
+      editor.createShape({ id: n.id, type: 'drawo-card', x: n.depth * COL_STEP, y: n.cy - n.h / 2, props: {
+        w: n.w, h: n.h, color: n.color, text: n.text, kind: n.kind,
       }})
-      ids.push(s.id)
+      ids.push(n.id)
     }
-    for (const [pid, cid] of arrows) {
-      const aid = createShapeId()
-      editor.createShape({ id: aid, type: 'arrow', props: { color: 'grey', size: 's' } })
-      editor.createBindings([
-        { type: 'arrow', fromId: aid, toId: pid, props: { terminal: 'start', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false } },
-        { type: 'arrow', fromId: aid, toId: cid, props: { terminal: 'end', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false } },
-      ])
-      ids.push(aid)
+    function connect(n: N) {
+      for (const c of n.kids) {
+        const aid = createShapeId()
+        const bend = Math.max(-46, Math.min(46, (c.cy - n.cy) * 0.16))
+        editor.createShape({ id: aid, type: 'arrow', isLocked: true, props: {
+          color: color(c.branch), size: 'm', dash: 'solid', bend, arrowheadStart: 'none', arrowheadEnd: 'none',
+        }})
+        editor.createBindings([
+          { type: 'arrow', fromId: aid, toId: n.id, props: { terminal: 'start', normalizedAnchor: { x: 1, y: 0.5 }, isExact: false, isPrecise: true } },
+          { type: 'arrow', fromId: aid, toId: c.id, props: { terminal: 'end', normalizedAnchor: { x: 0, y: 0.5 }, isExact: false, isPrecise: true } },
+        ])
+        ids.push(aid)
+        connect(c)
+      }
     }
-    editor.zoomToFit({ animation: { duration: 200 } })
-    return { ok: true, nodes: shapes.length, ids }
+    connect(root)
+    editor.zoomToFit({ animation: { duration: 250 } })
+    return { ok: true, nodes: nodes.length, ids }
   }
 
   if (op === 'export_svg') {
@@ -212,6 +289,7 @@ function App() {
       <Tldraw
         persistenceKey="drawo-v4"
         assetUrls={assetUrls}
+        shapeUtils={drawoShapeUtils}
         components={components}
         onMount={(editor) => {
           const api = (window as any).drawoAPI
