@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <title>Drawo</title>
+    <link rel="icon" href="./drawo-logo.png" />
     <style>
       html,body,#root{margin:0;height:100%;width:100%;overflow:hidden;background:#fff}
       /* Drawo UI font: clean native stack (no network). Menus portal to <body>,
@@ -13,6 +14,29 @@
       }
       /* hide third-party watermark (personal local use) */
       .tl-watermark_SEE-LICENSE,[class*="watermark" i]{display:none!important}
+      /* ---- Drawo theme ---- */
+      :root, .tl-container { --color-selected: #8B1FE0 !important; --color-primary: #8B1FE0 !important; --color-focus: #8B1FE0 !important; }
+      /* round + soften the floating UI panels, drop hard borders */
+      .tlui-layout .tlui-menu-zone,
+      .tlui-layout .tlui-navigation-zone > *,
+      .tlui-toolbar__tools,
+      .tlui-style-panel,
+      .tlui-menu,
+      .tlui-popover__content,
+      .tlui-helper-buttons > * {
+        border-radius: 12px !important;
+        box-shadow: 0 6px 24px rgba(16,18,26,0.12) !important;
+        border: none !important;
+      }
+      /* board pill (top-left) */
+      .drawo-menupanel { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 4px; }
+      .drawo-logo { width: 26px; height: 26px; object-fit: contain; user-select: none; }
+      .drawo-name { font-weight: 600; font-size: 14px; color: var(--color-text); margin: 0 6px 0 2px; white-space: nowrap; }
+      /* share panel (top-right) */
+      .drawo-sharepanel { display: flex; align-items: center; gap: 10px; padding: 3px 8px; }
+      .drawo-avatar { width: 30px; height: 30px; border-radius: 50%; background: #8B1FE0; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+      .drawo-share-btn { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: none; border-radius: 9px; background: #8B1FE0; color: #fff; font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
+      .drawo-share-btn:hover { background: #7A17C9; }
     </style>
   </head>
   <body>
