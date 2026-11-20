@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { Tldraw, Editor, createShapeId, useEditor, toRichText, DefaultMenuPanel } from 'tldraw'
+import { Tldraw, Editor, createShapeId, useEditor, useTools, toRichText, DefaultMenuPanel, TldrawUiButton, TldrawUiButtonIcon } from 'tldraw'
+import { useValue } from '@tldraw/state-react'
 import 'tldraw/tldraw.css'
 import { getAssetUrlsByImport } from '@tldraw/assets/imports.vite'
 import '@fontsource-variable/inter'
@@ -159,6 +160,33 @@ function BoardPill() {
   )
 }
 
+// ---- Drawo left vertical tool rail (Miro-style) ----
+const RAIL_TOOLS = ['select', 'hand', 'draw', 'eraser', 'arrow', 'text', 'note', 'geo', 'frame']
+function LeftRail() {
+  const editor = useEditor()
+  const tools = useTools()
+  const current = useValue('currentTool', () => editor.getCurrentToolId(), [editor])
+  const items = RAIL_TOOLS.map((id) => (tools as any)[id]).filter(Boolean)
+  return (
+    <div className="drawo-rail">
+      {items.map((t: any) => {
+        const active = current === t.id
+        return (
+          <TldrawUiButton
+            key={t.id}
+            type="icon"
+            title={t.label}
+            className={'drawo-rail-btn' + (active ? ' active' : '')}
+            onClick={() => t.onSelect('toolbar')}
+          >
+            <TldrawUiButtonIcon icon={t.icon} />
+          </TldrawUiButton>
+        )
+      })}
+    </div>
+  )
+}
+
 // ---- Drawo top-right: avatar + Share ----
 function TopRight() {
   return (
@@ -172,7 +200,7 @@ function TopRight() {
   )
 }
 
-const components = { Grid: SquareGrid, MenuPanel: BoardPill, SharePanel: TopRight }
+const components = { Grid: SquareGrid, MenuPanel: BoardPill, SharePanel: TopRight, Toolbar: LeftRail }
 
 function App() {
   return (
