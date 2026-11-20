@@ -6,7 +6,9 @@ const path = require('path')
 const fs = require('fs')
 const http = require('http')
 
-const APP_DIR = path.join(__dirname, '..', 'app', 'dist') // built tldraw app (vite build)
+// built tldraw app (vite build): ./app/dist when packaged, ../app/dist in the repo checkout
+const APP_DIR = [path.join(__dirname, 'app', 'dist'), path.join(__dirname, '..', 'app', 'dist')]
+  .find((p) => fs.existsSync(path.join(p, 'index.html'))) || path.join(__dirname, '..', 'app', 'dist')
 const CONTROL_PORT = Number(process.env.DRAWO_PORT || 3579)
 
 const TYPES = {
